@@ -1,6 +1,8 @@
 [tool.ruff]
 line-length = 110
 target-version = "py312"
+[tool.pytest.ini_options]
+pythonpath = ["."]
 
 [tool.ruff.lint.per-file-ignores]
 # usv_class.py and usv_library.py contain a few methods the original
