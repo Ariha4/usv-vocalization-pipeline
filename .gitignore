@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+venv/
+.venv/
+.DS_Store
+*.wav
+
+# Real recordings / experiment output are intentionally excluded.
+# See USV_DATA/README.md for details.
+USV_DATA/25kHz/*
+USV_DATA/40kHz/*
+!USV_DATA/25kHz/.gitkeep
+!USV_DATA/40kHz/.gitkeep
+exported_usvs/

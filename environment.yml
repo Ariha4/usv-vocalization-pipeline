@@ -1,0 +1,11 @@
+name: usvprocessing
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - ipykernel
+  - numpy>=2.2.0
+  - pandas>=2.2.3
+  - scipy
+  - matplotlib
+  - librosa
