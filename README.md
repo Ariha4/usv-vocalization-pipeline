@@ -57,12 +57,14 @@ usv_pipeline/
   detect_beeps.py     # standalone alignment-beep detector (audio-based)
   evt32_detector.py   # standalone alignment-beep detector (CSV/EVT32-based)
   rater_setup.py       # CLI helpers for the manual-validation workflow
+  live.py              # streaming detection from a replayed WAV or live input
 default_params/
   25kHz_with_trial_starts.json   # example tuned detection parameters
 tests/
   test_filtering.py    # bandpass/envelope tests on synthetic tones
   test_detection.py     # onset/offset/pairing tests on synthetic envelopes
   test_trials.py         # trial-assignment / lever-press-latency tests
+  test_live.py           # streaming detection tests on synthetic recordings
 ```
 
 ## Getting started
@@ -85,6 +87,33 @@ short synthetic envelope arrays with known onset/offset points for the
 detection tests. This keeps the test suite fast and dependency-free (no real
 audio files needed) while still exercising the actual algorithms rather than
 mocks.
+
+## Live (streaming) detection
+
+`usv_pipeline/live.py` runs the same detection steps on audio that arrives in small blocks,
+and prints each call shortly after it ends instead of waiting for the whole recording.
+
+- Audio is processed in 1 s frames that overlap by half, so a call cut off at the edge of one
+  frame is seen whole in the next. Calls near a frame edge wait for the next frame, and a call
+  is never reported twice.
+- Thresholds come from a parameter file exported by an earlier offline run, or from a
+  calibration window at the start of the stream (default 5 s), using the same
+  mean + k * std rule as the offline pipeline.
+- Calls are reported within about one frame (1 s) of ending.
+
+```bash
+# Replay a recording at real-time speed, as if it were coming from a microphone
+python -m usv_pipeline.live session.wav --params default_params/25kHz_with_trial_starts.json \
+    --realtime --labels session_live_labels.txt
+
+# Live input (needs `pip install sounddevice` and an ultrasonic mic + interface at 192-250 kHz)
+python -m usv_pipeline.live --mic --fs 250000 --params default_params/25kHz_with_trial_starts.json
+```
+
+A built-in laptop microphone samples at 44.1/48 kHz, which is too low to capture USVs, so the
+file-replay mode is how the streaming path is tested. `tests/test_live.py` checks it on
+synthetic recordings: every call is found exactly once (including calls that straddle frame
+boundaries), results don't depend on block size, and calls are reported within one frame.
 
 ## Known limitations / in-progress pieces
 
