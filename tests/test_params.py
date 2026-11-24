@@ -156,3 +156,13 @@ def test_cli_exits_with_a_readable_message_for_a_bad_params_file(tmp_path, monke
     assert message.startswith("error: Invalid detection parameters in")
     assert "Nyquist" in message
 
+
+def test_run_live_says_so_when_the_stream_ends_during_calibration():
+    messages = []
+    blocks = iter([(np.zeros(25_000, dtype=np.float32), 250_000)] * 4)   # 0.4 s of audio
+
+    calls = run_live(blocks, STREAMING_PARAMS, calibration_seconds=5.0, on_call=messages.append)
+
+    assert calls == []
+    assert len(messages) == 1
+    assert "before the 5 s calibration window filled" in messages[0]

@@ -248,6 +248,12 @@ def run_live(blocks, params, calibration_seconds=5.0, frame_duration=1.0, on_cal
         for call in detector.flush():
             all_calls.append(call)
             _report(call, detector, on_call)
+    elif calibration_samples:
+        # Otherwise a recording shorter than the calibration window reports "0 calls", which
+        # reads like a quiet session rather than one that was never analyzed.
+        on_call(f"Stream ended after {calibration_samples / fs:.1f} s, before the "
+                f"{calibration_seconds:g} s calibration window filled. Nothing was analyzed; "
+                "use a shorter --calibration-seconds or a parameter file with exported thresholds.")
     return all_calls
 
 
