@@ -43,13 +43,14 @@ Command line
 from __future__ import annotations
 
 import argparse
-import json
 import queue
+import sys
 import time
 
 import numpy as np
 
 from usv_pipeline import usv_library as ul
+from usv_pipeline.params import ParamsError, has_exported_thresholds, load_params, validate_params
 
 
 class StreamingUSVDetector:
@@ -82,6 +83,7 @@ class StreamingUSVDetector:
     @classmethod
     def from_exported_params(cls, fs, params, frame_duration=1.0, guard_duration=0.2):
         """Build a detector from thresholds saved by an earlier offline run (export_params)."""
+        validate_params(params, fs=fs)
         call_duration = tuple(params["call_duration"]) if params.get("twentyfive") else None
         return cls(fs, tuple(params["freq_range"]),
                    params["onset_params"]["on_thresh"], params["offset_params"]["off_thresh"],
@@ -96,6 +98,7 @@ class StreamingUSVDetector:
         Uses the same statistics (usv_library.get_thresholds_helper) and the same
         on/off/amp std multipliers as the offline pipeline.
         """
+        validate_params(params, fs=fs)
         freq_range = tuple(params["freq_range"])
         _, _, _, downsampled_env, env_derivative = ul.get_env(np.asarray(noise_samples), fs, freq_range)
         on_avg, on_std, off_avg, off_std = ul.get_thresholds_helper(downsampled_env, env_derivative)
@@ -218,10 +221,10 @@ def run_live(blocks, params, calibration_seconds=5.0, frame_duration=1.0, on_cal
     detector = None
     if all_calls is None:
         all_calls = []
-    has_exported_thresholds = "onset_params" in params
+    use_exported_thresholds = has_exported_thresholds(params)
 
     for samples, fs in blocks:
-        if detector is None and has_exported_thresholds:
+        if detector is None and use_exported_thresholds:
             detector = StreamingUSVDetector.from_exported_params(fs, params, frame_duration)
             on_call("Using thresholds from the parameter file. Listening...")
 
@@ -275,8 +278,12 @@ def main():
     parser.add_argument("--labels", help="also write detected calls as an Audacity label file")
     args = parser.parse_args()
 
-    with open(args.params) as params_file:
-        params = json.load(params_file)
+    try:
+        # With --mic the sample rate is known now, so a band above Nyquist fails before any audio.
+        # For a WAV file it is checked once the file's sample rate is read.
+        params = load_params(args.params, fs=args.fs if args.mic else None)
+    except (OSError, ParamsError) as error:
+        sys.exit(f"error: {error}")
 
     if args.mic:
         blocks = iter_microphone_blocks(args.fs, device=args.device)
@@ -290,6 +297,8 @@ def main():
         run_live(blocks, params, args.calibration_seconds, args.frame_duration, all_calls=calls)
     except KeyboardInterrupt:
         print("Stopped.")
+    except ValueError as error:   # includes ParamsError, e.g. freq_range above the file's Nyquist
+        sys.exit(f"error: {error}")
 
     print(f"{len(calls)} calls detected.")
     if args.labels:

@@ -1,10 +1,14 @@
-"""Tests for parameter-file validation (usv_pipeline/params.py)."""
+"""Tests for parameter-file validation (usv_pipeline/params.py) and how the live CLI reports it."""
 
 import json
+import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
+from usv_pipeline import live
+from usv_pipeline.live import StreamingUSVDetector, run_live
 from usv_pipeline.params import ParamsError, load_params, validate_params
 
 DEFAULT_PARAMS_DIR = Path(__file__).resolve().parent.parent / "default_params"
@@ -118,3 +122,37 @@ def test_load_params_reports_bad_json_with_the_file_name(tmp_path):
     with pytest.raises(ParamsError, match="broken.json") as excinfo:
         load_params(path)
     assert "not valid JSON" in excinfo.value.problems[0]
+
+
+def test_detector_rejects_band_above_nyquist_before_processing_audio():
+    noise = np.zeros(48_000, dtype=np.float32)
+    params = dict(STREAMING_PARAMS, freq_range=[20000, 30000])
+
+    with pytest.raises(ParamsError, match="Nyquist"):
+        StreamingUSVDetector.from_calibration(noise, 48_000, params)
+    with pytest.raises(ParamsError, match="Nyquist"):
+        StreamingUSVDetector.from_exported_params(48_000, dict(EXPORTED_PARAMS))
+
+
+def test_run_live_rejects_partial_exported_thresholds_instead_of_calibrating():
+    # Previously a file with amp_thresh but no onset_params silently fell back to calibration,
+    # and one with onset_params but no amp_thresh crashed with a KeyError on the first block.
+    params = dict(STREAMING_PARAMS, amp_thresh=0.3)
+    blocks = iter([(np.zeros(2500, dtype=np.float32), 250_000)])
+
+    with pytest.raises(ParamsError, match="incomplete"):
+        run_live(blocks, params, on_call=lambda message: None)
+
+
+def test_cli_exits_with_a_readable_message_for_a_bad_params_file(tmp_path, monkeypatch):
+    path = tmp_path / "params.json"
+    path.write_text(json.dumps(dict(STREAMING_PARAMS, freq_range=[20000, 90000])))
+    monkeypatch.setattr(sys, "argv", ["live", "--mic", "--fs", "96000", "--params", str(path)])
+
+    with pytest.raises(SystemExit) as excinfo:
+        live.main()
+
+    message = str(excinfo.value.code)
+    assert message.startswith("error: Invalid detection parameters in")
+    assert "Nyquist" in message
+
