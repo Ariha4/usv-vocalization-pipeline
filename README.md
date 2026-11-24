@@ -58,6 +58,7 @@ usv_pipeline/
   evt32_detector.py   # standalone alignment-beep detector (CSV/EVT32-based)
   rater_setup.py       # CLI helpers for the manual-validation workflow
   live.py              # streaming detection from a replayed WAV or live input
+  params.py            # loads + validates detection parameter JSON files
 default_params/
   25kHz_with_trial_starts.json   # example tuned detection parameters
 tests/
@@ -65,6 +66,7 @@ tests/
   test_detection.py     # onset/offset/pairing tests on synthetic envelopes
   test_trials.py         # trial-assignment / lever-press-latency tests
   test_live.py           # streaming detection tests on synthetic recordings
+  test_params.py         # parameter-file validation tests
 ```
 
 ## Getting started
@@ -114,6 +116,21 @@ A built-in laptop microphone samples at 44.1/48 kHz, which is too low to capture
 file-replay mode is how the streaming path is tested. `tests/test_live.py` checks it on
 synthetic recordings: every call is found exactly once (including calls that straddle frame
 boundaries), results don't depend on block size, and calls are reported within one frame.
+
+## Parameter files
+
+Both the offline pipeline (`USV.set_default_params`) and the live CLI load parameter files through
+`usv_pipeline/params.py`, which checks the whole file before any audio is processed and lists
+every problem at once: missing keys, a `window_size` that isn't a whole number of milliseconds,
+a `freq_range` whose upper edge is at or above the recording's Nyquist frequency (half the
+sample rate), incomplete exported thresholds, or `call_duration` bounds out of order when
+`twentyfive` is true.
+
+```
+$ python -m usv_pipeline.live laptop_recording.wav --params default_params/25kHz_with_trial_starts.json
+error: Invalid detection parameters:
+  - freq_range upper edge 30000 Hz must be below the Nyquist frequency (24000 Hz) for a 48000 Hz recording; use a higher sample rate or lower the band
+```
 
 ## Known limitations / in-progress pieces
 

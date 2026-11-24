@@ -7,6 +7,7 @@ import time
 import json
 
 from usv_pipeline import usv_library as ul
+from usv_pipeline.params import load_params
 
 
 # USV class for processing different Wav files
@@ -110,28 +111,14 @@ class USV:
         - has_markers: boolean for whether trial starts / lever presses are provided
         - params_source: source of parameters (json file)
         """
-        with open(f"default_params/{params_file}", 'r') as f:
-            args = json.load(f)
-            for key, value in args.items():
-                setattr(self, key, value)
-
-        try:
-            _ = self.freq_range
-            _ = self.window_size
-            _ = self.chunk_duration
-            _ = self.frame_duration
-            _ = self.on_std_multiplier
-            _ = self.off_std_multiplier
-            _ = self.amp_std_multiplier
-            _ = self.twentyfive
-            if self.twentyfive:
-                _ = self.call_duration
-                _ = self.neighbor_distance
-            _ = self.trial_starts is not None
-            _ = self.params_source 
-            print(f"Default parameters loaded from default_params/{params_file} for {self.name}.")
-        except AttributeError as e:
-            raise AttributeError(f"Missing parameter in {json} - {e}")
+        # Validate before setting anything, so a bad file can't leave the object half-configured.
+        # Raises ParamsError listing every missing or invalid key, including a freq_range that
+        # doesn't fit under this recording's Nyquist frequency.
+        params_path = f"default_params/{params_file}"
+        params = load_params(params_path, fs=self.fs, offline=True)
+        for key, value in params.items():
+            setattr(self, key, value)
+        print(f"Default parameters loaded from {params_path} for {self.name}.")
 
 
 
